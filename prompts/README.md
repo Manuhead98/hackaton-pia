@@ -25,3 +25,4 @@ prompts/
 - 010 — `010-musica-campanas-por-heroe.md` — Música de fondo por héroe durante todos los niveles de campaña. Estado: completado.
 - 011 — `011-jefe-ataques-y-movimientos.md` — Ataques a distancia y patrones de movimiento para el jefe final. Estado: completado.
 - 012 — `012-dos-vidas-por-golpes.md` — Dos vidas para el protagonista y pérdida por cada golpe/colisión. Estado: completado.
+- 013 — `013-enemigos-disparan.md` — Enemigos comunes disparan proyectiles al jugador. Estado: completado.

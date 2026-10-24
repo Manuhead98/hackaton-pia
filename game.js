@@ -280,6 +280,8 @@ function resetLevel() {
       w: 30,
       h: 40,
       inicio: spawn.x,
+      shotCooldown: 1 + Math.random() * 1.2,
+      shotInterval: 2.6 + Math.random() * 0.8,
       sprite: i % 2 === 0 ? "infantry" : "officer"
     });
   }
@@ -492,9 +494,34 @@ function updateEnemies() {
     if (Math.abs(e.x - e.inicio) > e.rango) {
       e.vx *= -1;
     }
+
+    e.shotCooldown -= deltaTime / 1000;
+    if (e.shotCooldown <= 0) {
+      fireEnemyShot(e);
+      e.shotCooldown = e.shotInterval;
+    }
   }
 
   if (finalBoss && !finalBoss.defeated) updateFinalBoss();
+}
+
+function fireEnemyShot(enemy) {
+  const originX = enemy.x + enemy.w / 2;
+  const originY = enemy.y + enemy.h / 2;
+  const targetX = player.x + player.w / 2;
+  const targetY = player.y + player.h / 2;
+  const angle = Math.atan2(targetY - originY, targetX - originX);
+  const speed = 2.8;
+
+  enemyProjectiles.push({
+    x: originX,
+    y: originY,
+    w: 8,
+    h: 7,
+    vx: Math.cos(angle) * speed,
+    vy: Math.sin(angle) * speed,
+    kind: "infantry"
+  });
 }
 
 function updateFinalBoss() {
@@ -568,7 +595,8 @@ function fireBossVolley() {
       w: 9,
       h: 7,
       vx: Math.cos(angle) * speed,
-      vy: Math.sin(angle) * speed
+      vy: Math.sin(angle) * speed,
+      kind: "boss"
     });
   });
   playImpactSound();
@@ -659,9 +687,9 @@ function drawEntities() {
 
   noStroke();
   for (const shot of enemyProjectiles) {
-    fill("#6d271f");
+    fill(shot.kind === "boss" ? "#6d271f" : "#7d3030");
     rect(shot.x, shot.y, shot.w, shot.h);
-    fill("#e5b54e");
+    fill(shot.kind === "boss" ? "#e5b54e" : "#d8b768");
     rect(shot.x + 2, shot.y + 2, 4, 3);
   }
 
