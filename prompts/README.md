@@ -7,7 +7,10 @@ Carpeta para registrar los prompts utilizados durante el desarrollo del videojue
 ```text
 prompts/
 ├── README.md
-├── 001-auditoria-inicial.md
-├── 002-estabilizacion-proyecto.md
+├── 001-interfaz-escenarios.md
 └── ...
 ```
+
+## Prompts registrados
+
+- 001 — `001-interfaz-escenarios.md` — Desarrollo de interfaz, selección de héroes, HUD, escenarios visuales y pantallas de fin de partida. Estado: completado.

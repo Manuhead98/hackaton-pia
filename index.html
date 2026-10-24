@@ -141,24 +141,256 @@
         margin-top: 1.2rem;
         text-align: right;
       }
+
+      .game-screen {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 1rem;
+        min-height: 250px;
+        padding: 0.5rem 0 0.25rem;
+      }
+
+      .game-screen.hidden,
+      .hud.hidden {
+        display: none;
+      }
+
+      .title-banner {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.15rem;
+        text-transform: uppercase;
+        letter-spacing: 0.18rem;
+        color: var(--text-color);
+        font-weight: 700;
+        text-shadow: 0 0 12px rgba(0, 255, 204, 0.7);
+      }
+
+      .title-banner .line {
+        font-size: clamp(1.1rem, 2vw, 1.8rem);
+      }
+
+      .title-banner .accent {
+        color: #ffd166;
+      }
+
+      .menu-stack,
+      .screen-actions {
+        display: flex;
+        flex-direction: column;
+        gap: 0.7rem;
+        width: min(280px, 78%);
+      }
+
+      .menu-btn,
+      .hero-card {
+        background: rgba(17, 27, 43, 0.9);
+        border: 1px solid var(--border-color);
+        color: var(--text-color);
+        font-family: inherit;
+        font-size: 0.8rem;
+        letter-spacing: 0.08rem;
+        text-transform: uppercase;
+        cursor: pointer;
+        transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+      }
+
+      .menu-btn {
+        padding: 0.8rem 1rem;
+      }
+
+      .menu-btn.primary {
+        background: rgba(0, 255, 204, 0.15);
+      }
+
+      .menu-btn:hover,
+      .hero-card:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 0 12px rgba(0, 255, 204, 0.4);
+      }
+
+      .prompt-meter {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        border: 1px dashed var(--border-color);
+        padding: 0.45rem 0.8rem;
+        font-size: 0.7rem;
+        letter-spacing: 0.1rem;
+        text-transform: uppercase;
+      }
+
+      #hero-screen h2 {
+        margin: 0;
+        letter-spacing: 0.14rem;
+        text-transform: uppercase;
+        font-size: 0.9rem;
+      }
+
+      .hero-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(130px, 1fr));
+        gap: 0.8rem;
+        width: 100%;
+      }
+
+      .hero-card {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        justify-content: center;
+        min-height: 92px;
+        text-align: left;
+        padding: 0.75rem 0.8rem;
+      }
+
+      .hero-name,
+      .hero-tag {
+        display: block;
+      }
+
+      .hero-name {
+        font-size: 0.78rem;
+        font-weight: 700;
+        line-height: 1.3;
+      }
+
+      .hero-tag {
+        margin-top: 0.25rem;
+        font-size: 0.6rem;
+        opacity: 0.85;
+      }
+
+      .status-line {
+        margin-top: 0.2rem;
+        margin-bottom: 0.6rem;
+        min-height: 1.2rem;
+        font-size: 0.72rem;
+        letter-spacing: 0.04rem;
+      }
+
+      .hud {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(80px, 1fr));
+        gap: 0.5rem;
+        width: 100%;
+        margin: 0.25rem 0 0.6rem;
+      }
+
+      .hud-item {
+        background: rgba(0, 0, 0, 0.28);
+        border: 1px solid var(--border-color);
+        padding: 0.55rem 0.5rem;
+        text-align: center;
+      }
+
+      .hud-item span {
+        display: block;
+        font-size: 0.56rem;
+        letter-spacing: 0.08rem;
+        text-transform: uppercase;
+        opacity: 0.8;
+      }
+
+      .hud-item strong {
+        display: block;
+        margin-top: 0.2rem;
+        font-size: 0.75rem;
+      }
+
+      @media (max-width: 640px) {
+        .hero-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .header-bar {
+          flex-direction: column;
+          gap: 0.7rem;
+        }
+      }
     </style>
     <link rel="icon" href="data:image/png;base64,TU_CADENA_BASE64" type="image/png">
   </head>
   <body>
     <div class="terminal-box">
       <div class="header-bar">
-        <h1>EMOSIDO ENGAÑADOS</h1>
+        <h1 id="app-title">HÉROES DE LA INDEPENDENCIA</h1>
         <div class="header-buttons">
           <button class="btn-action" id="btn-sound" onclick="toggleAudio()">
             🔊 Audio: ON
           </button>
-          <button class="btn-action" onclick="toggleModal(true)">
+          <button class="btn-action" id="btn-instructions" onclick="toggleModal(true)">
             Ok... ¿Qué hago?
           </button>
         </div>
       </div>
-      <p>
-        > Usá las flechas del teclado para guiar al michi y atrapar el láser.
+
+      <div id="title-screen" class="game-screen active">
+        <div class="title-banner">
+          <span class="line">HÉROES</span>
+          <span class="line accent">DE LA</span>
+          <span class="line">INDEPENDENCIA</span>
+        </div>
+
+        <div class="menu-stack">
+          <button id="start-game-btn" class="menu-btn primary">Comenzar</button>
+          <button id="select-hero-btn" class="menu-btn">Elegir héroe</button>
+          <button id="show-instructions-btn" class="menu-btn">Instrucciones</button>
+        </div>
+
+        <div class="prompt-meter">
+          <span>Prompts</span>
+          <strong id="prompt-meter">0</strong>
+        </div>
+      </div>
+
+      <div id="hero-screen" class="game-screen hidden">
+        <h2>Seleccioná a tu héroe</h2>
+
+        <div class="hero-grid">
+          <button class="hero-card" data-hero="San Martín">
+            <span class="hero-name">José de San Martín</span>
+            <span class="hero-tag">Ejército de los Andes</span>
+          </button>
+          <button class="hero-card" data-hero="Belgrano">
+            <span class="hero-name">Manuel Belgrano</span>
+            <span class="hero-tag">Éxodo Jujeño</span>
+          </button>
+          <button class="hero-card" data-hero="Güemes">
+            <span class="hero-name">Martín Miguel de Güemes</span>
+            <span class="hero-tag">Guardianes del Norte</span>
+          </button>
+        </div>
+
+        <div class="screen-actions">
+          <button id="back-to-menu-btn" class="menu-btn secondary">Volver</button>
+        </div>
+      </div>
+
+      <div id="hud" class="hud hidden">
+        <div class="hud-item">
+          <span>Héroe</span>
+          <strong id="hud-hero">-</strong>
+        </div>
+        <div class="hud-item">
+          <span>Vidas</span>
+          <strong id="hud-lives">3</strong>
+        </div>
+        <div class="hud-item">
+          <span>Puntaje</span>
+          <strong id="hud-score">0</strong>
+        </div>
+        <div class="hud-item">
+          <span>Nivel</span>
+          <strong id="hud-level">1/3</strong>
+        </div>
+      </div>
+
+      <p id="status-line" class="status-line">
+        > Elegí a tu héroe para liberar la campaña.
       </p>
       <div id="game-container"></div>
     </div>
@@ -274,6 +506,73 @@
         modal.style.display = show ? "flex" : "none";
       }
 
+      function setScreen(screenId) {
+        const screens = ["title-screen", "hero-screen"];
+        screens.forEach((id) => {
+          const element = document.getElementById(id);
+          if (element) {
+            element.classList.toggle("hidden", id !== screenId);
+            element.classList.toggle("active", id === screenId);
+          }
+        });
+      }
+
+      function setStatus(message) {
+        const line = document.getElementById("status-line");
+        if (line) {
+          line.innerHTML = "> " + message;
+        }
+      }
+
+      function updatePromptMeter(value) {
+        const meter = document.getElementById("prompt-meter");
+        if (meter) {
+          meter.textContent = String(value);
+        }
+      }
+
+      function bindMenuControls() {
+        const startBtn = document.getElementById("start-game-btn");
+        const selectHeroBtn = document.getElementById("select-hero-btn");
+        const backBtn = document.getElementById("back-to-menu-btn");
+        const showInstructionsBtn = document.getElementById("show-instructions-btn");
+
+        if (startBtn) {
+          startBtn.addEventListener("click", () => {
+            if (typeof startGame === "function") {
+              startGame();
+            }
+          });
+        }
+
+        if (selectHeroBtn) {
+          selectHeroBtn.addEventListener("click", () => {
+            setScreen("hero-screen");
+            setStatus("Seleccioná a tu campeón.");
+          });
+        }
+
+        if (backBtn) {
+          backBtn.addEventListener("click", () => {
+            setScreen("title-screen");
+            setStatus("Elegí a tu héroe para liberar la campaña.");
+          });
+        }
+
+        if (showInstructionsBtn) {
+          showInstructionsBtn.addEventListener("click", () => toggleModal(true));
+        }
+
+        document.querySelectorAll(".hero-card").forEach((card) => {
+          card.addEventListener("click", () => {
+            const heroName = card.dataset.hero;
+            if (typeof selectHero === "function") {
+              selectHero(heroName);
+            }
+          });
+        });
+      }
+
       // Control global de Audio On/Off para el maullido nativo
       let soundMuted = false;
       function toggleAudio() {
@@ -291,6 +590,8 @@
           }
         }
       }
+
+      document.addEventListener("DOMContentLoaded", bindMenuControls);
     </script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.6.0/p5.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.6.0/addons/p5.sound.min.js"></script>
