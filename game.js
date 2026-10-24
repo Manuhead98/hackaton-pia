@@ -1,7 +1,4 @@
-let catX = 50,
-  catY = 160;
-let laserX = 420,
-  laserY = 160;
+let gameState = 'MENU';
 let score = 0;
 const SPEED = 4;
 let isMoving = false;
@@ -520,7 +517,7 @@ function keyPressed() {
 }
 
 function mousePressed() {
-  if (getAudioContext().state !== "running") {
+  if (getAudioContext().state !== 'running') {
     getAudioContext().resume();
   }
 }
