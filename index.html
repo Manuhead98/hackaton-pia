@@ -309,6 +309,56 @@
         box-shadow: none;
       }
 
+      .boss-health-panel {
+        grid-column: 1 / -1;
+        display: grid;
+        grid-template-columns: 1fr auto;
+        align-items: center;
+        gap: 0.35rem 0.7rem;
+        padding: 0.55rem 0.7rem;
+        background: #f3e8ce;
+        border: 2px solid #76502e;
+        box-shadow: inset 0 0 0 2px #d4b36b, 0 2px 0 #533c29;
+      }
+
+      .boss-health-panel.hidden {
+        display: none;
+      }
+
+      .boss-health-panel strong {
+        color: #5c2e2b;
+        font-family: var(--font-display);
+        font-size: 0.8rem;
+        text-shadow: 0 1px #fff9e8;
+      }
+
+      .boss-health-value {
+        color: #5c2e2b;
+        font-family: var(--font-body);
+        font-size: 0.72rem;
+        font-weight: 800;
+      }
+
+      .boss-health-track {
+        grid-column: 1 / -1;
+        height: 13px;
+        padding: 2px;
+        background: #372c26;
+        border: 1px solid #49372b;
+      }
+
+      .boss-health-fill {
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(180deg, #b43e35 0%, #7d211f 100%);
+        box-shadow: inset 0 2px rgba(255, 232, 199, 0.35);
+        transition: width 160ms ease-out;
+      }
+
+      .boss-health-fill.low {
+        background: linear-gradient(180deg, #d68a3a 0%, #9f4526 100%);
+      }
+
       @media (max-width: 640px) {
         .hero-grid {
           grid-template-columns: 1fr;
@@ -620,6 +670,13 @@
             ← Nivel anterior
           </button>
         </div>
+        <div id="boss-health-panel" class="boss-health-panel hidden" aria-live="polite">
+          <strong id="boss-health-name">Comandante realista</strong>
+          <span id="boss-health-value" class="boss-health-value">12/12</span>
+          <div class="boss-health-track" role="progressbar" aria-label="Vida del jefe" aria-valuemin="0" aria-valuemax="12" aria-valuenow="12">
+            <div id="boss-health-fill" class="boss-health-fill"></div>
+          </div>
+        </div>
       </div>
 
       <p id="status-line" class="status-line">
@@ -647,6 +704,7 @@
         <h3>Cómo avanzar y ganar</h3>
         <ol>
           <li>Derrotá la cantidad de adversarios indicada en el objetivo del escenario.</li>
+          <li>En el tercer nivel aparecerá un comandante realista con su propia barra de vida: disparale hasta derrotarlo.</li>
           <li>Al cumplirlo, el arco con la bandera se abre. Caminá hasta la salida para avanzar.</li>
           <li>Completá los tres niveles para liberar tu campaña. Al final aparecerá la pantalla de victoria.</li>
         </ol>
@@ -726,21 +784,18 @@
         });
       }
 
-      // Control global de Audio On/Off para el maullido nativo
+      // Control global para la música de campaña y los efectos de sonido.
       let soundMuted = false;
       function toggleAudio() {
         soundMuted = !soundMuted;
         const btn = document.getElementById("btn-sound");
         if (soundMuted) {
           btn.innerText = "🔇 Audio: OFF";
-          if (typeof soundCat !== "undefined" && soundCat) {
-            soundCat.muted = true;
-          }
         } else {
           btn.innerText = "🔊 Audio: ON";
-          if (typeof soundCat !== "undefined" && soundCat) {
-            soundCat.muted = false;
-          }
+        }
+        if (typeof setGameAudioMuted === "function") {
+          setGameAudioMuted(soundMuted);
         }
       }
 

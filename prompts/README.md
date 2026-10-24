@@ -21,3 +21,5 @@ prompts/
 - 006 — `006-progresion-y-transiciones-niveles.md` — Navegación hacia atrás, objetivos alcanzables y transición temática entre niveles. Estado: completado.
 - 007 — `007-manual-tipografia-y-contador.md` — Manual de juego, retiro del contador y tipografía patria con relieve. Estado: completado.
 - 008 — `008-carteles-madera-final.md` — Carteles de madera legibles para victoria y derrota. Estado: completado.
+- 009 — `009-jefe-final-campana.md` — Jefe ficticio realista con barra de vida en el tercer nivel de cada campaña. Estado: completado.
+- 010 — `010-musica-campanas-por-heroe.md` — Música de fondo por héroe durante todos los niveles de campaña. Estado: completado.

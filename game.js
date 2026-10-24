@@ -21,17 +21,20 @@ const HEROES = {
   "San Martín": {
     name: "José de San Martín",
     campaign: "Ejército de los Andes",
-    accent: "#00ffcc"
+    accent: "#00ffcc",
+    music: "musica/sanmartin.mp3"
   },
   Belgrano: {
     name: "Manuel Belgrano",
     campaign: "Éxodo Jujeño",
-    accent: "#ffd166"
+    accent: "#ffd166",
+    music: "musica/belgrano.mp3"
   },
   Güemes: {
     name: "Martín Miguel de Güemes",
     campaign: "Guardianes del Norte",
-    accent: "#ff8fab"
+    accent: "#ff8fab",
+    music: "musica/guemes.mp3"
   }
 };
 
@@ -39,17 +42,17 @@ const CAMPAIGNS = {
   "San Martín": [
     { name: "Campamento del Ejército de los Andes", goal: 2, timeLimit: 35, theme: "andesCamp" },
     { name: "Cruce de la cordillera", goal: 3, timeLimit: 45, theme: "cordillera" },
-    { name: "Camino a la libertad", goal: 4, timeLimit: 55, theme: "libertad" }
+    { name: "Camino a la libertad", goal: 4, timeLimit: 55, theme: "libertad", boss: "Comandante realista" }
   ],
   Belgrano: [
     { name: "Éxodo Jujeño", goal: 2, timeLimit: 35, theme: "jujuy" },
     { name: "Defensa de Tucumán", goal: 3, timeLimit: 45, theme: "tucuman" },
-    { name: "Victoria de Salta", goal: 4, timeLimit: 55, theme: "salta" }
+    { name: "Victoria de Salta", goal: 4, timeLimit: 55, theme: "salta", boss: "Comandante realista" }
   ],
   "Güemes": [
     { name: "Guardianes del Norte", goal: 2, timeLimit: 35, theme: "norte" },
     { name: "Emboscada en el valle", goal: 3, timeLimit: 45, theme: "valle" },
-    { name: "La última resistencia", goal: 4, timeLimit: 55, theme: "resistencia" }
+    { name: "La última resistencia", goal: 4, timeLimit: 55, theme: "resistencia", boss: "Comandante realista" }
   ]
 };
 const LEVELS_PER_CAMPAIGN = 3;
@@ -64,6 +67,7 @@ let levelTimer = CAMPAIGNS["San Martín"][0].timeLimit;
 let levelTransitionStart = 0;
 let completedLevelName = "";
 let enemiesDefeated = 0;
+let finalBoss = null;
 
 let player = {
   x: 50,
@@ -86,6 +90,8 @@ let platforms = [];
 let meta = null;
 let osc, env;
 let gameCanvas;
+let campaignMusic = null;
+let gameAudioMuted = false;
 
 function setup() {
   pixelDensity(1);
@@ -127,6 +133,7 @@ function selectHero(heroName) {
 function startGame() {
   gameState = GAME_STATES.PLAYING;
   setGameCanvasVisible(true);
+  startCampaignMusic();
   levelIndex = 0;
   totalScore = 0;
   score = 0;
@@ -137,6 +144,50 @@ function startGame() {
   updateHUD();
   resetLevel();
   setStatus(`${HEROES[selectedHero].campaign} activa.`);
+}
+
+function startCampaignMusic() {
+  const musicPath = HEROES[selectedHero]?.music;
+  if (!musicPath || gameAudioMuted) return;
+
+  if (campaignMusic && campaignMusic.src !== new URL(musicPath, document.baseURI).href) {
+    campaignMusic.pause();
+    campaignMusic.currentTime = 0;
+    campaignMusic = null;
+  }
+
+  if (!campaignMusic) {
+    campaignMusic = new Audio(musicPath);
+    campaignMusic.loop = true;
+    campaignMusic.preload = "auto";
+    campaignMusic.volume = 0.35;
+  }
+
+  const playback = campaignMusic.play();
+  if (playback && typeof playback.catch === "function") {
+    playback.catch(() => {
+      setStatus("La música no pudo iniciarse. Activá el audio y volvé a comenzar.");
+    });
+  }
+}
+
+function stopCampaignMusic() {
+  if (campaignMusic) {
+    campaignMusic.pause();
+    campaignMusic.currentTime = 0;
+  }
+}
+
+function setGameAudioMuted(muted) {
+  gameAudioMuted = Boolean(muted);
+  if (campaignMusic) campaignMusic.muted = gameAudioMuted;
+  if (typeof soundCat !== "undefined" && soundCat) soundCat.muted = gameAudioMuted;
+
+  if (gameAudioMuted) {
+    if (osc) osc.amp(0, 0.05);
+  } else if (gameState === GAME_STATES.PLAYING) {
+    startCampaignMusic();
+  }
 }
 
 function hideMenuPanels() {
@@ -182,6 +233,7 @@ function updateHUD() {
   if (hudLevel) {
     hudLevel.textContent = `${Math.min(levelIndex + 1, LEVELS_PER_CAMPAIGN)}/${LEVELS_PER_CAMPAIGN}`;
   }
+  updateBossHealthUI();
   const previousLevelButton = document.getElementById("previous-level-btn");
   if (previousLevelButton) {
     previousLevelButton.disabled = levelIndex === 0;
@@ -204,6 +256,7 @@ function resetLevel() {
   enemiesDefeated = 0;
   projectiles = [];
   enemies = [];
+  finalBoss = null;
   platforms = [];
 
   platforms.push({ x: 0, y: 280, w: 560, h: 40 });
@@ -227,8 +280,45 @@ function resetLevel() {
     });
   }
 
+  if (level.boss) {
+    finalBoss = {
+      name: level.boss,
+      x: 426,
+      y: 214,
+      w: 54,
+      h: 66,
+      vx: -0.9,
+      minX: 394,
+      maxX: 472,
+      hp: 12,
+      maxHp: 12,
+      defeated: false,
+      sprite: "boss"
+    };
+  }
+
   meta = { x: 515, y: 220, w: 24, h: 60, activo: true };
   updateHUD();
+}
+
+function updateBossHealthUI() {
+  const panel = document.getElementById("boss-health-panel");
+  const title = document.getElementById("boss-health-name");
+  const fill = document.getElementById("boss-health-fill");
+  const value = document.getElementById("boss-health-value");
+  const track = panel?.querySelector('[role="progressbar"]');
+  if (!panel || !title || !fill || !value) return;
+
+  const bossIsActive = Boolean(finalBoss && !finalBoss.defeated);
+  panel.classList.toggle("hidden", !bossIsActive);
+  if (!bossIsActive) return;
+
+  const healthRatio = Math.max(0, finalBoss.hp / finalBoss.maxHp);
+  title.textContent = finalBoss.name;
+  fill.style.width = `${healthRatio * 100}%`;
+  value.textContent = `${Math.max(0, finalBoss.hp)}/${finalBoss.maxHp}`;
+  fill.classList.toggle("low", healthRatio <= 0.3);
+  track?.setAttribute("aria-valuenow", String(Math.max(0, finalBoss.hp)));
 }
 
 function currentLevel() {
@@ -246,6 +336,7 @@ function advanceLevel() {
     updateHUD();
   } else {
     gameState = GAME_STATES.VICTORY;
+    stopCampaignMusic();
     setStatus("Victoria: la campaña fue liberada.");
     hideHUD();
   }
@@ -275,6 +366,7 @@ function loseLife() {
 
   if (lives <= 0) {
     gameState = GAME_STATES.GAME_OVER;
+    stopCampaignMusic();
     setStatus("Derrota: la misión fue rechazada.");
     hideHUD();
     return;
@@ -286,21 +378,21 @@ function loseLife() {
 }
 
 function playDisparoSound() {
-  if (osc) {
+  if (osc && !gameAudioMuted) {
     osc.freq(random(400, 800));
     env.play(osc);
   }
 }
 
 function playImpactSound() {
-  if (osc) {
+  if (osc && !gameAudioMuted) {
     osc.freq(random(150, 300));
     env.play(osc);
   }
 }
 
 function playCatchSound() {
-  if (osc) {
+  if (osc && !gameAudioMuted) {
     osc.freq(random(600, 900));
     env.play(osc);
   }
@@ -386,6 +478,13 @@ function updateEnemies() {
       e.vx *= -1;
     }
   }
+
+  if (finalBoss && !finalBoss.defeated) {
+    finalBoss.x += finalBoss.vx;
+    if (finalBoss.x <= finalBoss.minX || finalBoss.x >= finalBoss.maxX) {
+      finalBoss.vx *= -1;
+    }
+  }
 }
 
 function colisionRect(a, b) {
@@ -395,6 +494,21 @@ function colisionRect(a, b) {
 function checkCollisions() {
   for (let i = projectiles.length - 1; i >= 0; i--) {
     let pr = projectiles[i];
+    if (finalBoss && !finalBoss.defeated && colisionRect(pr, finalBoss)) {
+      finalBoss.hp -= 1;
+      projectiles.splice(i, 1);
+      playImpactSound();
+      if (finalBoss.hp <= 0) {
+        finalBoss.hp = 0;
+        finalBoss.defeated = true;
+        totalScore += 5;
+        setStatus(`${finalBoss.name} derrotado. La salida patriótica está abierta.`);
+        updateHUD();
+      }
+      updateBossHealthUI();
+      continue;
+    }
+
     for (let j = enemies.length - 1; j >= 0; j--) {
       let e = enemies[j];
       if (colisionRect(pr, e)) {
@@ -421,7 +535,18 @@ function checkCollisions() {
     }
   }
 
-  if (meta && colisionRect(player, meta) && enemiesDefeated >= levelGoal) {
+  if (finalBoss && !finalBoss.defeated && colisionRect(player, finalBoss)) {
+    player.vida--;
+    player.x = 50;
+    player.y = 100;
+    player.vx = 0;
+    player.vy = 0;
+    if (player.vida <= 0) loseLife();
+  }
+
+  const regularEnemiesCleared = enemiesDefeated >= levelGoal;
+  const bossCleared = !finalBoss || finalBoss.defeated;
+  if (meta && colisionRect(player, meta) && regularEnemiesCleared && bossCleared) {
     advanceLevel();
   }
 }
@@ -436,6 +561,10 @@ function drawEntities() {
 
   for (let e of enemies) {
     drawEnemyPixel(e);
+  }
+
+  if (finalBoss && !finalBoss.defeated) {
+    drawEnemyPixel(finalBoss);
   }
 
   fill("#444444");
@@ -454,7 +583,8 @@ function drawMissionObjective() {
   textSize(10);
   textFont("Georgia");
   textAlign(LEFT, CENTER);
-  text(`ADVERSARIOS: ${enemiesDefeated}/${levelGoal}`, 18, 52);
+  const bossRemaining = finalBoss && !finalBoss.defeated ? " · JEFE EN PIE" : "";
+  text(`ADVERSARIOS: ${enemiesDefeated}/${levelGoal}${bossRemaining}`, 18, 52);
 }
 
 function drawLevelTransition() {
@@ -643,6 +773,7 @@ function keyPressed() {
 
     if (gameState === GAME_STATES.VICTORY || gameState === GAME_STATES.GAME_OVER) {
       gameState = GAME_STATES.MENU;
+      stopCampaignMusic();
       setGameCanvasVisible(false);
       setScreen("title-screen");
       setStatus("Elegí a tu héroe para liberar la campaña.");

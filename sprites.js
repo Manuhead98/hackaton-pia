@@ -16,6 +16,7 @@ function preload() {
     heroSprites.belgrano  = createPixelArtCanvas(32, 48, drawBelgrano);
     enemySprites.infantry = createPixelArtCanvas(32, 48, drawRoyalistInfantry);
     enemySprites.officer = createPixelArtCanvas(32, 48, drawRoyalistOfficer);
+    enemySprites.boss = createPixelArtCanvas(48, 64, drawRoyalistBoss);
 }
 
 // -------------------------------------------------------------
@@ -115,6 +116,28 @@ function drawRoyalistOfficer(ctx) {
     ], { D:'#202733', G:'#e0b94f', S:'#d9a17b', H:'#35241e', U:'#354c72', R:'#9b3039', P:'#d4cbbb', B:'#30231f', W:'#9ca9b1' });
 }
 
+// Jefe ficticio: comandante de la tropa realista con bicornio, charreteras y sable.
+function drawRoyalistBoss(ctx) {
+    drawPixelRows(ctx, [
+        '        GGGGGGGG        ', '      GGGGGGGGGGGG      ',
+        '    DDDDDDDDDDDDDDDD    ', '   DDDDDDDDDDDDDDDDDD   ',
+        '          HHHH          ', '         SSSSSS         ',
+        '        HSSSSSSH        ', '         SSSSSS         ',
+        '          DDDD          ', '     DDDDDDDDDDDDDD     ',
+        '    DDDGGGGGGGGDDDD    ', '   DDGUUUUUUUUUUGDD     ',
+        '   DDUUGGGGGGGGUUDD     ', '   DDUURRRRRRRRUUDD     ',
+        '  DD UURRRRRRRRUU DD    ', '  D  UUUUUUUUUUUU  D    ',
+        '     UUGGGGGGGGUU       ', '     UUUUUUUUUUUU       ',
+        '    UUUUUUUUUUUUUU      ', '    UUPPUUUUUUPPUU      ',
+        '   DD PPPPPPPPPP DD     ', '      PP      PP        ',
+        '      PP      PP        ', '     BBBB    BBBB       ',
+        '     BBBB    BBBB       ', '    BBBBB    BBBBB      ',
+        '    DDDDD    DDDDD      ', '       DDDDDDDDDD        ',
+        '       DDDDDDDDDD        ', '       W          DDD   ',
+        '       WW          DD   ', '       WWWWWWWWWWWWWW    '
+    ], { D:'#201e20', G:'#d9b14b', H:'#38261e', S:'#d9a17b', U:'#334968', R:'#8d3038', P:'#d7c9a5', B:'#30241e', W:'#c6c6bd' });
+}
+
 // Función auxiliar para renderizar al Héroe seleccionado en pantalla
 function drawHeroPixel(heroKey, x, y, isMoving, facingRight) {
     const spriteKey = {
@@ -143,13 +166,18 @@ function drawEnemyPixel(enemy) {
     const enemyImage = enemySprites[enemy.sprite] || enemySprites.infantry;
     if (!enemyImage) return;
 
+    const spriteWidth = enemy.sprite === 'boss' ? 64 : 36;
+    const spriteHeight = enemy.sprite === 'boss' ? 80 : 54;
+    const spriteX = enemy.x - (spriteWidth - enemy.w) / 2;
+    const spriteY = enemy.y - (spriteHeight - enemy.h);
+
     push();
     if (enemy.vx < 0) {
-        translate(enemy.x + enemy.w + 3, enemy.y - 10);
+        translate(spriteX + spriteWidth, spriteY);
         scale(-1, 1);
-        image(enemyImage, 0, 0, 36, 54);
+        image(enemyImage, 0, 0, spriteWidth, spriteHeight);
     } else {
-        image(enemyImage, enemy.x - 3, enemy.y - 10, 36, 54);
+        image(enemyImage, spriteX, spriteY, spriteWidth, spriteHeight);
     }
     pop();
 }
