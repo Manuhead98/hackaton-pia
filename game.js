@@ -1,5 +1,8 @@
 let gameState = 'MENU';
 let score = 0;
+const SPEED = 4;
+let isMoving = false;
+let facingRight = false;
 let promptCount = 0;
 
 const GRAVITY = 0.6;
@@ -40,6 +43,7 @@ const LEVELS = [
   { name: "Guardianes del Norte", goal: 14, timeLimit: 16, theme: "norte" }
 ];
 
+let gameState = GAME_STATES.MENU;
 let selectedHero = "San Martín";
 let levelIndex = 0;
 let lives = 3;
@@ -60,14 +64,13 @@ let player = {
   direccion: 1,
   enSuelo: false,
   cooldownDisparo: 0,
-  color: '#00ffcc'
+  color: "#00ffcc"
 };
 
 let projectiles = [];
 let enemies = [];
 let platforms = [];
 let meta = null;
-
 let osc, env;
 
 function setup() {
@@ -82,18 +85,80 @@ function setup() {
   osc.start();
   osc.amp(0);
 
+  setScreen("title-screen");
+  setStatus("Elegí a tu héroe para liberar la campaña.");
+  hideHUD();
+  updateHUD();
   resetLevel();
+}
+
+function selectHero(heroName) {
+  selectedHero = heroName;
+  player.color = HEROES[heroName].accent;
+  setScreen("title-screen");
+  setStatus(`${HEROES[heroName].name} listo para la misión.`);
+  updateHUD();
+}
+
+function startGame() {
+  gameState = GAME_STATES.PLAYING;
+  levelIndex = 0;
+  totalScore = 0;
+  score = 0;
+  lives = 3;
+  setScreen("title-screen");
+  hideMenuPanels();
+  showHUD();
+  updateHUD();
+  resetLevel();
+  setStatus(`${HEROES[selectedHero].campaign} activa.`);
+}
+
+function hideMenuPanels() {
+  const screens = document.querySelectorAll(".game-screen");
+  screens.forEach((screen) => screen.classList.add("hidden"));
+}
+
+function showHUD() {
+  const hud = document.getElementById("hud");
+  if (hud) {
+    hud.classList.remove("hidden");
+  }
+}
+
+function hideHUD() {
+  const hud = document.getElementById("hud");
+  if (hud) {
+    hud.classList.add("hidden");
+  }
+}
+
+function updateHUD() {
+  const hudHero = document.getElementById("hud-hero");
+  const hudLives = document.getElementById("hud-lives");
+  const hudScore = document.getElementById("hud-score");
+  const hudLevel = document.getElementById("hud-level");
+
+  if (hudHero) {
+    hudHero.textContent = HEROES[selectedHero].name;
+  }
+  if (hudLives) {
+    hudLives.textContent = String(lives);
+  }
+  if (hudScore) {
+    hudScore.textContent = String(totalScore);
+  }
+  if (hudLevel) {
+    hudLevel.textContent = `${Math.min(levelIndex + 1, LEVELS.length)}/${LEVELS.length}`;
+  }
+
+  updatePromptMeter(promptCount);
 }
 
 function resetLevel() {
   const level = currentLevel();
   levelGoal = level.goal;
   levelTimer = level.timeLimit;
-  initNivel();
-  updateHUD();
-}
-
-function initNivel() {
   player.x = 50;
   player.y = 100;
   player.vx = 0;
@@ -101,19 +166,20 @@ function initNivel() {
   player.vida = player.vidaMax;
   player.direccion = 1;
   player.cooldownDisparo = 0;
+  score = 0;
   projectiles = [];
   enemies = [];
   platforms = [];
-  score = 0;
 
   platforms.push({ x: 0, y: 280, w: 560, h: 40 });
-  platforms.push({ x: 150, y: 200, w: 100, h: 20 });
-  platforms.push({ x: 300, y: 160, w: 100, h: 20 });
+  platforms.push({ x: 150, y: 210, w: 110, h: 18 });
+  platforms.push({ x: 310, y: 165, w: 110, h: 18 });
 
-  enemies.push({ x: 200, y: 240, w: 30, h: 40, vx: 2, rango: 80, inicio: 200 });
-  enemies.push({ x: 400, y: 120, w: 30, h: 40, vx: -2, rango: 60, inicio: 400 });
+  enemies.push({ x: 180, y: 240, w: 30, h: 40, vx: 1.5, rango: 80, inicio: 180 });
+  enemies.push({ x: 390, y: 120, w: 30, h: 40, vx: -1.8, rango: 72, inicio: 390 });
 
-  meta = { x: 520, y: 220, w: 30, h: 60, activo: true };
+  meta = { x: 515, y: 220, w: 24, h: 60, activo: true };
+  updateHUD();
 }
 
 function currentLevel() {
@@ -125,25 +191,34 @@ function advanceLevel() {
     levelIndex += 1;
     gameState = GAME_STATES.LEVEL_COMPLETE;
     levelTransitionStart = millis();
+    setStatus(`Nivel superado: ${currentLevel().name}.`);
+    updateHUD();
   } else {
     gameState = GAME_STATES.VICTORY;
+    setStatus("Victoria: la campaña fue liberada.");
+    hideHUD();
   }
 }
 
 function loseLife() {
   lives -= 1;
+  updateHUD();
 
   if (lives <= 0) {
     gameState = GAME_STATES.GAME_OVER;
+    setStatus("Derrota: la misión fue rechazada.");
+    hideHUD();
     return;
   }
 
   resetLevel();
   gameState = GAME_STATES.PLAYING;
+  setStatus(`Vidas restantes: ${lives}. Reintentá.`);
 }
 
 function registerPrompt() {
   promptCount += 1;
+  updatePromptMeter(promptCount);
 }
 
 function playDisparoSound() {
@@ -164,58 +239,6 @@ function playCatchSound() {
   if (osc) {
     osc.freq(random(600, 900));
     env.play(osc);
-  }
-}
-
-function draw() {
-  background(11, 15, 25);
-  drawGrid();
-
-  if (gameState === GAME_STATES.MENU) {
-    drawMenu();
-    drawPromptCounter();
-    return;
-  }
-
-  if (gameState === GAME_STATES.HERO_SELECT) {
-    drawHeroSelect();
-    drawPromptCounter();
-    return;
-  }
-
-  if (gameState === GAME_STATES.PLAYING) {
-    updateInput();
-    updatePlayer();
-    updateProjectiles();
-    updateEnemies();
-    checkCollisions();
-    checkMeta();
-    drawEntities();
-    drawHUD();
-    drawPromptCounter();
-    return;
-  }
-
-  if (gameState === GAME_STATES.LEVEL_COMPLETE) {
-    drawLevelComplete();
-    drawPromptCounter();
-    if (millis() - levelTransitionStart > 1200) {
-      resetLevel();
-      gameState = GAME_STATES.PLAYING;
-    }
-    return;
-  }
-
-  if (gameState === GAME_STATES.VICTORY) {
-    drawVictory();
-    drawPromptCounter();
-    return;
-  }
-
-  if (gameState === GAME_STATES.GAME_OVER) {
-    drawGameOver();
-    drawPromptCounter();
-    return;
   }
 }
 
@@ -251,11 +274,11 @@ function updatePlayer() {
   player.enSuelo = false;
   for (let p of platforms) {
     if (colisionRect(player, p)) {
-      if (player.vy > 0 && player.y + player.h - player.vy <= p.y) {
+      if (player.vy > 0 && player.y + player.h - player.vy <= p.y + 4) {
         player.y = p.y - player.h;
         player.vy = 0;
         player.enSuelo = true;
-      } else if (player.vy < 0 && player.y - player.vy >= p.y + p.h) {
+      } else if (player.vy < 0 && player.y - player.vy >= p.y + p.h - 4) {
         player.y = p.y + p.h;
         player.vy = 0;
       }
@@ -264,9 +287,9 @@ function updatePlayer() {
 
   if (player.x < 0) player.x = 0;
   if (player.x + player.w > width) player.x = width - player.w;
-  if (player.y > height) {
+  if (player.y > height + 40) {
     player.vida = 0;
-    checkCollisions();
+    loseLife();
   }
 }
 
@@ -301,6 +324,10 @@ function updateEnemies() {
   }
 }
 
+function colisionRect(a, b) {
+  return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+}
+
 function checkCollisions() {
   for (let i = projectiles.length - 1; i >= 0; i--) {
     let pr = projectiles[i];
@@ -328,175 +355,165 @@ function checkCollisions() {
       break;
     }
   }
-}
 
-function checkMeta() {
-  if (meta && colisionRect(player, meta)) {
-    if (score >= levelGoal) {
-      advanceLevel();
-    } else {
-      gameState = GAME_STATES.VICTORY;
-    }
+  if (meta && colisionRect(player, meta) && score >= levelGoal) {
+    advanceLevel();
   }
-}
-
-function colisionRect(a, b) {
-  return a.x < b.x + b.w &&
-    a.x + a.w > b.x &&
-    a.y < b.y + b.h &&
-    a.y + a.h > b.y;
 }
 
 function drawEntities() {
   fill(player.color);
   rect(player.x, player.y, player.w, player.h);
 
-  fill('#ffff00');
+  fill("#ffff00");
   for (let pr of projectiles) {
     rect(pr.x, pr.y, pr.w, pr.h);
   }
 
-  fill('#ff0000');
+  fill("#ff0000");
   for (let e of enemies) {
     rect(e.x, e.y, e.w, e.h);
   }
 
-  fill('#444444');
+  fill("#444444");
   for (let p of platforms) {
     rect(p.x, p.y, p.w, p.h);
   }
 
-  fill('#00ff00');
+  fill("#00ff00");
   if (meta) rect(meta.x, meta.y, meta.w, meta.h);
 }
 
 function drawHUD() {
-  fill('#00ffcc');
-  textSize(14);
-  textFont('Courier New');
+  fill("#00ffcc");
+  textSize(12);
+  textFont("Courier New");
   textAlign(LEFT, TOP);
-  text('Héroe: ' + HEROES[selectedHero].name, 15, 18);
-  text('VIDAS: ' + lives, 15, 34);
-  text('PUNTAJE: ' + totalScore, 15, 50);
-  text('META: ' + Math.max(levelGoal - score, 0), 15, 66);
-  text('TIEMPO: ' + Math.max(0, ceil(levelTimer)) + 's', 15, 82);
-  text('ESTADO: ' + gameState, 15, 98);
-}
-
-function drawGrid() {
-  stroke(0, 255, 204, 15);
-  strokeWeight(1);
-  for (let x = 0; x < width; x += 16) line(x, 0, x, height);
-  for (let y = 0; y < height; y += 16) line(0, y, width, y);
+  text(`HÉROE: ${HEROES[selectedHero].name}`, 15, 18);
+  text(`VIDAS: ${lives}`, 15, 34);
+  text(`PUNTAJE: ${totalScore}`, 15, 50);
+  text(`META: ${Math.max(levelGoal - score, 0)}`, 15, 66);
+  text(`TIEMPO: ${Math.max(0, ceil(levelTimer))}s`, 15, 82);
 }
 
 function drawPromptCounter() {
-  fill('#00ffcc');
+  fill("#00ffcc");
   textSize(12);
-  textFont('Courier New');
+  textFont("Courier New");
   textAlign(RIGHT, TOP);
-  text('PROMPTS: ' + promptCount, width - 15, 20);
+  text(`PROMPTS: ${promptCount}`, width - 15, 20);
 }
 
-function drawMenu() {
-  fill('#00ffcc');
-  textSize(24);
-  textAlign(CENTER, CENTER);
-  text('HÉROES DE LA INDEPENDENCIA', width / 2, height / 3);
-  textSize(16);
-  text('Presioná Enter para comenzar', width / 2, height / 2);
-  textSize(12);
-  text('Desarrollador A: Gameplay | Desarrollador B: UI y Escenarios', width / 2, height / 2 + 40);
+function seedFromTopDownCatchMode() {
+  const level = currentLevel();
+  drawScenarioBackdrop(level.theme, level.name);
+  drawBackgroundGrid();
+  noFill();
+  stroke("#00ffcc55");
+  rect(0, 0, width, height);
 }
 
-function drawHeroSelect() {
-  fill('#00ffcc');
-  textSize(20);
-  textAlign(CENTER, CENTER);
-  text('SELECCIONÁ TU HÉROE', width / 2, height / 4);
-  textSize(14);
-  let i = 0;
-  for (let key in HEROES) {
-    let h = HEROES[key];
-    fill(h.accent);
-    text((i + 1) + '. ' + h.name + ' - ' + h.campaign, width / 2, height / 3 + i * 30);
-    i++;
+function draw() {
+  const level = currentLevel();
+  drawScenarioBackdrop(level.theme, level.name);
+
+  if (gameState === GAME_STATES.MENU || gameState === GAME_STATES.HERO_SELECT) {
+    return;
   }
-  textSize(12);
-  fill('#00ffcc');
-  text('Presioná 1, 2 o 3 para elegir', width / 2, height - 40);
-}
 
-function drawLevelComplete() {
-  fill('#00ffcc');
-  textSize(20);
-  textAlign(CENTER, CENTER);
-  text('NIVEL COMPLETADO', width / 2, height / 2);
-  textSize(12);
-  text('Siguiente escenario: ' + currentLevel().name, width / 2, height / 2 + 25);
-}
+  if (gameState === GAME_STATES.LEVEL_COMPLETE) {
+    noStroke();
+    fill("#00ffcc");
+    textSize(18);
+    textAlign(CENTER, CENTER);
+    text("NIVEL COMPLETADO", width / 2, height / 2);
+    textSize(12);
+    text(`Siguiente escenario: ${currentLevel().name}`, width / 2, height / 2 + 22);
 
-function drawVictory() {
-  fill(0, 0, 0, 180);
-  rect(0, 0, width, height);
-  fill('#00ff00');
-  textSize(24);
-  textAlign(CENTER, CENTER);
-  text('¡VICTORIA!', width / 2, height / 2 - 20);
-  textSize(14);
-  text('Presioná Enter para volver al menú', width / 2, height / 2 + 25);
-}
+    if (millis() - levelTransitionStart > 1200) {
+      resetLevel();
+      gameState = GAME_STATES.PLAYING;
+      showHUD();
+      setStatus(`Entrando a ${currentLevel().name}.`);
+    }
+    return;
+  }
 
-function drawGameOver() {
-  fill(0, 0, 0, 180);
-  rect(0, 0, width, height);
-  fill('#ff0000');
-  textSize(24);
-  textAlign(CENTER, CENTER);
-  text('DERROTA', width / 2, height / 2 - 20);
-  textSize(14);
-  text('Presioná Enter para volver al menú', width / 2, height / 2 + 25);
+  if (gameState === GAME_STATES.VICTORY || gameState === GAME_STATES.GAME_OVER) {
+    noStroke();
+    fill(gameState === GAME_STATES.VICTORY ? "#00ffcc" : "#ff6b6b");
+    textSize(20);
+    textAlign(CENTER, CENTER);
+    const title = gameState === GAME_STATES.VICTORY ? "¡VICTORIA!" : "DERROTA";
+    text(title, width / 2, height / 2 - 12);
+    textSize(12);
+    text("Presioná Enter para volver al menú", width / 2, height / 2 + 18);
+    return;
+  }
+
+  updateInput();
+  updatePlayer();
+  updateProjectiles();
+  updateEnemies();
+  checkCollisions();
+  drawEntities();
+  drawHUD();
+  drawPromptCounter();
+
+  if (player.vida <= 0) {
+    loseLife();
+  }
+
+  levelTimer -= 0.016;
+  if (levelTimer <= 0) {
+    loseLife();
+  }
+
+  if (score >= levelGoal && meta) {
+    advanceLevel();
+  }
 }
 
 function keyPressed() {
-  if (key === 'Enter' || keyCode === ENTER) {
+  if (keyCode === ENTER) {
     if (gameState === GAME_STATES.MENU) {
       gameState = GAME_STATES.HERO_SELECT;
-    } else if (gameState === GAME_STATES.HERO_SELECT) {
+      setScreen("hero-screen");
+      setStatus("Seleccioná a tu campeón.");
+      return;
+    }
+
+    if (gameState === GAME_STATES.HERO_SELECT) {
       startGame();
-    } else if (gameState === GAME_STATES.VICTORY || gameState === GAME_STATES.GAME_OVER) {
+      return;
+    }
+
+    if (gameState === GAME_STATES.VICTORY || gameState === GAME_STATES.GAME_OVER) {
       gameState = GAME_STATES.MENU;
+      setScreen("title-screen");
+      setStatus("Elegí a tu héroe para liberar la campaña.");
+      hideHUD();
+      return;
     }
   }
 
-  if (key === '1') {
+  if (key === "1") {
     selectedHero = "San Martín";
     player.color = HEROES["San Martín"].accent;
-  } else if (key === '2') {
+    updateHUD();
+  } else if (key === "2") {
     selectedHero = "Belgrano";
     player.color = HEROES.Belgrano.accent;
-  } else if (key === '3') {
+    updateHUD();
+  } else if (key === "3") {
     selectedHero = "Güemes";
     player.color = HEROES.Güemes.accent;
+    updateHUD();
   }
 
-  if (key === 'p' || key === 'P') {
+  if (key === "p" || key === "P") {
     registerPrompt();
   }
-
-  if (key === 'r' || key === 'R') {
-    if (gameState === GAME_STATES.GAME_OVER || gameState === GAME_STATES.VICTORY) {
-      gameState = GAME_STATES.MENU;
-    }
-  }
-}
-
-function startGame() {
-  gameState = GAME_STATES.PLAYING;
-  levelIndex = 0;
-  totalScore = 0;
-  lives = 3;
-  resetLevel();
 }
 
 function mousePressed() {

@@ -7,6 +7,33 @@ function preload() {
     soundCat = new Audio(MAULLIDO_B64);
 }
 
+const SCENARIO_THEMES = {
+    andes: {
+        sky: "#0a1220",
+        mist: "#00ffcc",
+        ground: "#112233",
+        accent: "#ffd166",
+        mountain: "#29415f",
+        detail: "#77d7ff"
+    },
+    cordillera: {
+        sky: "#141b2a",
+        mist: "#63c7ff",
+        ground: "#2b2a3a",
+        accent: "#ff8fab",
+        mountain: "#3e4c6d",
+        detail: "#ffd166"
+    },
+    norte: {
+        sky: "#1b0f17",
+        mist: "#ffbf69",
+        ground: "#2d1d1d",
+        accent: "#ff7e5f",
+        mountain: "#5d3d43",
+        detail: "#ffd9a8"
+    }
+};
+
 // Dibujar al Pop Cat usando las imágenes de assets con animación de boca
 function drawCatPixel(x, y, isMoving, facingRight) {
     push();
@@ -52,6 +79,39 @@ function drawPixel(x, y, colorCode) {
     fill(colorCode);
     noStroke();
     rect(x * 3, y * 3, 3, 3);
+}
+
+function drawScenarioBackdrop(themeKey, label) {
+    const theme = SCENARIO_THEMES[themeKey] || SCENARIO_THEMES.andes;
+    background(theme.sky);
+
+    noStroke();
+    fill(theme.mist, 30);
+    for (let i = 0; i < 8; i++) {
+        const px = (i * 78) + (frameCount * 0.25) % 30;
+        const py = 20 + (i % 3) * 28;
+        ellipse(px, py, 90, 22);
+    }
+
+    fill(theme.mountain);
+    triangle(0, 260, 80, 140, 200, 260);
+    triangle(140, 260, 300, 100, 430, 260);
+    triangle(320, 260, 470, 130, 560, 260);
+
+    fill(theme.ground);
+    rect(0, 245, width, 80);
+
+    fill(theme.accent, 80);
+    for (let i = 0; i < 12; i++) {
+        rect(i * 50 + 10, 250 + (i % 3) * 8, 18, 8);
+    }
+
+    fill(theme.detail);
+    textAlign(LEFT, TOP);
+    textSize(12);
+    text(label.toUpperCase(), 18, 18);
+
+    drawBackgroundGrid();
 }
 
 // Dibuja el láser con rayo proyectado, destellos y auras de luz
