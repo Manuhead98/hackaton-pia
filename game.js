@@ -60,7 +60,7 @@ const LEVELS_PER_CAMPAIGN = 3;
 let gameState = GAME_STATES.MENU;
 let selectedHero = "San Martín";
 let levelIndex = 0;
-let lives = 3;
+let lives = 2;
 let totalScore = 0;
 let levelGoal = CAMPAIGNS["San Martín"][0].goal;
 let levelTimer = CAMPAIGNS["San Martín"][0].timeLimit;
@@ -76,15 +76,17 @@ let player = {
   h: 40,
   vx: 0,
   vy: 0,
-  vida: 3,
-  vidaMax: 3,
+  vida: 2,
+  vidaMax: 2,
   direccion: 1,
   enSuelo: false,
   cooldownDisparo: 0,
+  damageCooldown: 0,
   color: "#00ffcc"
 };
 
 let projectiles = [];
+let enemyProjectiles = [];
 let enemies = [];
 let platforms = [];
 let meta = null;
@@ -137,7 +139,7 @@ function startGame() {
   levelIndex = 0;
   totalScore = 0;
   score = 0;
-  lives = 3;
+  lives = 2;
   setScreen("title-screen");
   hideMenuPanels();
   showHUD();
@@ -249,12 +251,14 @@ function resetLevel() {
   player.y = 100;
   player.vx = 0;
   player.vy = 0;
-  player.vida = player.vidaMax;
+  player.vida = lives;
   player.direccion = 1;
   player.cooldownDisparo = 0;
+  player.damageCooldown = 0;
   score = 0;
   enemiesDefeated = 0;
   projectiles = [];
+  enemyProjectiles = [];
   enemies = [];
   finalBoss = null;
   platforms = [];
@@ -290,6 +294,12 @@ function resetLevel() {
       vx: -0.9,
       minX: 394,
       maxX: 472,
+      groundY: 214,
+      vy: 0,
+      movement: "patrol",
+      movementTimer: 2.2,
+      shotCooldown: 1.5,
+      chargeDirection: -1,
       hp: 12,
       maxHp: 12,
       defeated: false,
@@ -361,20 +371,7 @@ function goToPreviousLevel() {
 }
 
 function loseLife() {
-  lives -= 1;
-  updateHUD();
-
-  if (lives <= 0) {
-    gameState = GAME_STATES.GAME_OVER;
-    stopCampaignMusic();
-    setStatus("Derrota: la misión fue rechazada.");
-    hideHUD();
-    return;
-  }
-
-  resetLevel();
-  gameState = GAME_STATES.PLAYING;
-  setStatus(`Vidas restantes: ${lives}. Reintentá.`);
+  damagePlayer();
 }
 
 function playDisparoSound() {
@@ -423,6 +420,10 @@ function updateInput() {
 }
 
 function updatePlayer() {
+  if (player.damageCooldown > 0) {
+    player.damageCooldown = Math.max(0, player.damageCooldown - deltaTime / 1000);
+  }
+
   player.vy += GRAVITY;
   player.x += player.vx;
   player.y += player.vy;
@@ -469,6 +470,20 @@ function updateProjectiles() {
       projectiles.splice(i, 1);
     }
   }
+
+  for (let i = enemyProjectiles.length - 1; i >= 0; i--) {
+    const projectile = enemyProjectiles[i];
+    projectile.x += projectile.vx;
+    projectile.y += projectile.vy;
+    if (projectile.x < -20 || projectile.x > width + 20 || projectile.y < -20 || projectile.y > height + 20) {
+      enemyProjectiles.splice(i, 1);
+      continue;
+    }
+    if (colisionRect(projectile, player)) {
+      enemyProjectiles.splice(i, 1);
+      damagePlayer();
+    }
+  }
 }
 
 function updateEnemies() {
@@ -479,12 +494,105 @@ function updateEnemies() {
     }
   }
 
-  if (finalBoss && !finalBoss.defeated) {
-    finalBoss.x += finalBoss.vx;
-    if (finalBoss.x <= finalBoss.minX || finalBoss.x >= finalBoss.maxX) {
-      finalBoss.vx *= -1;
+  if (finalBoss && !finalBoss.defeated) updateFinalBoss();
+}
+
+function updateFinalBoss() {
+  const boss = finalBoss;
+  const frameScale = Math.min(deltaTime / (1000 / 60), 2);
+  boss.shotCooldown -= deltaTime / 1000;
+  boss.movementTimer -= deltaTime / 1000;
+
+  if (boss.shotCooldown <= 0) {
+    fireBossVolley();
+    boss.shotCooldown = 1.8;
+  }
+
+  if (boss.movementTimer <= 0 && boss.movement !== "leap") {
+    if (boss.movement === "patrol") {
+      boss.movement = "aim";
+      boss.movementTimer = 0.65;
+    } else if (boss.movement === "aim") {
+      boss.movement = "charge";
+      boss.chargeDirection = player.x < boss.x ? -1 : 1;
+      boss.vx = boss.chargeDirection * 3.6;
+      boss.movementTimer = 0.55;
+    } else if (boss.movement === "charge") {
+      boss.movement = "leap";
+      boss.vy = -8.5;
+      boss.vx = boss.chargeDirection * 1.5;
+      boss.movementTimer = 1.1;
+    } else {
+      boss.movement = "patrol";
+      boss.vx = boss.chargeDirection * -1.2;
+      boss.movementTimer = 1.6;
     }
   }
+
+  boss.x += boss.vx * frameScale;
+  if (boss.x <= boss.minX || boss.x >= boss.maxX) {
+    boss.x = constrain(boss.x, boss.minX, boss.maxX);
+    boss.vx *= -1;
+    if (boss.movement === "charge") boss.movementTimer = 0;
+  }
+
+  if (boss.movement === "leap") {
+    boss.vy += GRAVITY * frameScale;
+    boss.y += boss.vy * frameScale;
+    if (boss.y >= boss.groundY) {
+      boss.y = boss.groundY;
+      boss.vy = 0;
+      boss.movement = "patrol";
+      boss.vx = boss.chargeDirection * -1.2;
+      boss.movementTimer = 1.5;
+    }
+  }
+}
+
+function fireBossVolley() {
+  if (!finalBoss || finalBoss.defeated) return;
+
+  const originX = finalBoss.x + finalBoss.w / 2;
+  const originY = finalBoss.y + 24;
+  const targetX = player.x + player.w / 2;
+  const targetY = player.y + player.h / 2;
+  const aimAngle = Math.atan2(targetY - originY, targetX - originX);
+  const spread = [-0.18, 0, 0.18];
+
+  spread.forEach((offset) => {
+    const angle = aimAngle + offset;
+    const speed = 3.2;
+    enemyProjectiles.push({
+      x: originX,
+      y: originY,
+      w: 9,
+      h: 7,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed
+    });
+  });
+  playImpactSound();
+}
+
+function damagePlayer() {
+  if (player.damageCooldown > 0 || gameState !== GAME_STATES.PLAYING) return;
+
+  lives = Math.max(0, lives - 1);
+  player.vida = lives;
+  player.damageCooldown = 0.85;
+  player.vx = 0;
+  player.vy = -3;
+  updateHUD();
+
+  if (lives <= 0) {
+    gameState = GAME_STATES.GAME_OVER;
+    stopCampaignMusic();
+    setStatus("Perdiste las dos vidas. La misión terminó.");
+    hideHUD();
+    return;
+  }
+
+  setStatus("¡Recibiste un golpe! Te queda una vida.");
 }
 
 function colisionRect(a, b) {
@@ -525,23 +633,13 @@ function checkCollisions() {
 
   for (let e of enemies) {
     if (colisionRect(player, e)) {
-      player.vida--;
-      player.x = 50;
-      player.y = 100;
-      if (player.vida <= 0) {
-        loseLife();
-      }
+      damagePlayer();
       break;
     }
   }
 
   if (finalBoss && !finalBoss.defeated && colisionRect(player, finalBoss)) {
-    player.vida--;
-    player.x = 50;
-    player.y = 100;
-    player.vx = 0;
-    player.vy = 0;
-    if (player.vida <= 0) loseLife();
+    damagePlayer();
   }
 
   const regularEnemiesCleared = enemiesDefeated >= levelGoal;
@@ -559,11 +657,31 @@ function drawEntities() {
     rect(pr.x, pr.y, pr.w, pr.h);
   }
 
+  noStroke();
+  for (const shot of enemyProjectiles) {
+    fill("#6d271f");
+    rect(shot.x, shot.y, shot.w, shot.h);
+    fill("#e5b54e");
+    rect(shot.x + 2, shot.y + 2, 4, 3);
+  }
+
   for (let e of enemies) {
     drawEnemyPixel(e);
   }
 
   if (finalBoss && !finalBoss.defeated) {
+    if (finalBoss.movement === "aim") {
+      fill("#fff0bd");
+      textFont("Georgia");
+      textSize(9);
+      textAlign(CENTER, BOTTOM);
+      text("¡APUNTA!", finalBoss.x + finalBoss.w / 2, finalBoss.y - 5);
+    } else if (finalBoss.movement === "charge") {
+      noStroke();
+      fill("#b84432");
+      rect(finalBoss.x - finalBoss.chargeDirection * 20, finalBoss.y + 36, 12, 5);
+      rect(finalBoss.x - finalBoss.chargeDirection * 34, finalBoss.y + 44, 8, 4);
+    }
     drawEnemyPixel(finalBoss);
   }
 
@@ -741,7 +859,10 @@ function draw() {
 
   levelTimer -= 0.016;
   if (levelTimer <= 0) {
-    loseLife();
+    if (player.damageCooldown <= 0) {
+      levelTimer = currentLevel().timeLimit;
+      loseLife();
+    }
   }
 
 }

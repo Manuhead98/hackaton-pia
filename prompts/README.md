@@ -23,3 +23,5 @@ prompts/
 - 008 — `008-carteles-madera-final.md` — Carteles de madera legibles para victoria y derrota. Estado: completado.
 - 009 — `009-jefe-final-campana.md` — Jefe ficticio realista con barra de vida en el tercer nivel de cada campaña. Estado: completado.
 - 010 — `010-musica-campanas-por-heroe.md` — Música de fondo por héroe durante todos los niveles de campaña. Estado: completado.
+- 011 — `011-jefe-ataques-y-movimientos.md` — Ataques a distancia y patrones de movimiento para el jefe final. Estado: completado.
+- 012 — `012-dos-vidas-por-golpes.md` — Dos vidas para el protagonista y pérdida por cada golpe/colisión. Estado: completado.
