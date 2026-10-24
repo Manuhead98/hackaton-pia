@@ -1,4 +1,4 @@
-let gameState = 'PLAYING';
+let gameState = 'MENU';
 let score = 0;
 let promptCount = 0;
 
@@ -7,9 +7,50 @@ const JUMP_FORCE = -12;
 const MOVE_SPEED = 4;
 const FRICTION = 0.8;
 
+const GAME_STATES = Object.freeze({
+  MENU: "menu",
+  HERO_SELECT: "hero_select",
+  PLAYING: "playing",
+  LEVEL_COMPLETE: "level_complete",
+  VICTORY: "victory",
+  GAME_OVER: "game_over"
+});
+
+const HEROES = {
+  "San Martín": {
+    name: "José de San Martín",
+    campaign: "Ejército de los Andes",
+    accent: "#00ffcc"
+  },
+  Belgrano: {
+    name: "Manuel Belgrano",
+    campaign: "Éxodo Jujeño",
+    accent: "#ffd166"
+  },
+  Güemes: {
+    name: "Martín Miguel de Güemes",
+    campaign: "Guardianes del Norte",
+    accent: "#ff8fab"
+  }
+};
+
+const LEVELS = [
+  { name: "Ejército de los Andes", goal: 6, timeLimit: 20, theme: "andes" },
+  { name: "Cruce de la cordillera", goal: 10, timeLimit: 18, theme: "cordillera" },
+  { name: "Guardianes del Norte", goal: 14, timeLimit: 16, theme: "norte" }
+];
+
+let selectedHero = "San Martín";
+let levelIndex = 0;
+let lives = 3;
+let totalScore = 0;
+let levelGoal = LEVELS[0].goal;
+let levelTimer = LEVELS[0].timeLimit;
+let levelTransitionStart = 0;
+
 let player = {
   x: 50,
-  y: 200,
+  y: 100,
   w: 30,
   h: 40,
   vx: 0,
@@ -41,7 +82,15 @@ function setup() {
   osc.start();
   osc.amp(0);
 
+  resetLevel();
+}
+
+function resetLevel() {
+  const level = currentLevel();
+  levelGoal = level.goal;
+  levelTimer = level.timeLimit;
   initNivel();
+  updateHUD();
 }
 
 function initNivel() {
@@ -67,11 +116,74 @@ function initNivel() {
   meta = { x: 520, y: 220, w: 30, h: 60, activo: true };
 }
 
+function currentLevel() {
+  return LEVELS[levelIndex] || LEVELS[LEVELS.length - 1];
+}
+
+function advanceLevel() {
+  if (levelIndex < LEVELS.length - 1) {
+    levelIndex += 1;
+    gameState = GAME_STATES.LEVEL_COMPLETE;
+    levelTransitionStart = millis();
+  } else {
+    gameState = GAME_STATES.VICTORY;
+  }
+}
+
+function loseLife() {
+  lives -= 1;
+
+  if (lives <= 0) {
+    gameState = GAME_STATES.GAME_OVER;
+    return;
+  }
+
+  resetLevel();
+  gameState = GAME_STATES.PLAYING;
+}
+
+function registerPrompt() {
+  promptCount += 1;
+}
+
+function playDisparoSound() {
+  if (osc) {
+    osc.freq(random(400, 800));
+    env.play(osc);
+  }
+}
+
+function playImpactSound() {
+  if (osc) {
+    osc.freq(random(150, 300));
+    env.play(osc);
+  }
+}
+
+function playCatchSound() {
+  if (osc) {
+    osc.freq(random(600, 900));
+    env.play(osc);
+  }
+}
+
 function draw() {
   background(11, 15, 25);
   drawGrid();
 
-  if (gameState === 'PLAYING') {
+  if (gameState === GAME_STATES.MENU) {
+    drawMenu();
+    drawPromptCounter();
+    return;
+  }
+
+  if (gameState === GAME_STATES.HERO_SELECT) {
+    drawHeroSelect();
+    drawPromptCounter();
+    return;
+  }
+
+  if (gameState === GAME_STATES.PLAYING) {
     updateInput();
     updatePlayer();
     updateProjectiles();
@@ -80,13 +192,31 @@ function draw() {
     checkMeta();
     drawEntities();
     drawHUD();
-  } else if (gameState === 'GAME_OVER') {
-    drawGameOver();
-  } else if (gameState === 'VICTORY') {
-    drawVictory();
+    drawPromptCounter();
+    return;
   }
 
-  drawPromptCounter();
+  if (gameState === GAME_STATES.LEVEL_COMPLETE) {
+    drawLevelComplete();
+    drawPromptCounter();
+    if (millis() - levelTransitionStart > 1200) {
+      resetLevel();
+      gameState = GAME_STATES.PLAYING;
+    }
+    return;
+  }
+
+  if (gameState === GAME_STATES.VICTORY) {
+    drawVictory();
+    drawPromptCounter();
+    return;
+  }
+
+  if (gameState === GAME_STATES.GAME_OVER) {
+    drawGameOver();
+    drawPromptCounter();
+    return;
+  }
 }
 
 function updateInput() {
@@ -136,7 +266,7 @@ function updatePlayer() {
   if (player.x + player.w > width) player.x = width - player.w;
   if (player.y > height) {
     player.vida = 0;
-    gameState = 'GAME_OVER';
+    checkCollisions();
   }
 }
 
@@ -180,6 +310,7 @@ function checkCollisions() {
         enemies.splice(j, 1);
         projectiles.splice(i, 1);
         score += 100;
+        totalScore += 1;
         playImpactSound();
         break;
       }
@@ -192,7 +323,7 @@ function checkCollisions() {
       player.x = 50;
       player.y = 100;
       if (player.vida <= 0) {
-        gameState = 'GAME_OVER';
+        loseLife();
       }
       break;
     }
@@ -201,7 +332,11 @@ function checkCollisions() {
 
 function checkMeta() {
   if (meta && colisionRect(player, meta)) {
-    gameState = 'VICTORY';
+    if (score >= levelGoal) {
+      advanceLevel();
+    } else {
+      gameState = GAME_STATES.VICTORY;
+    }
   }
 }
 
@@ -239,33 +374,13 @@ function drawHUD() {
   fill('#00ffcc');
   textSize(14);
   textFont('Courier New');
-  text('VIDAS: ' + player.vida, 15, 25);
-  text('PUNTAJE: ' + score, 15, 45);
-  text('ESTADO: ' + gameState, 15, 65);
-}
-
-function drawGameOver() {
-  fill(0, 0, 0, 150);
-  rect(0, 0, width, height);
-  fill('#ff0000');
-  textSize(24);
-  textAlign(CENTER);
-  text('DERROTA', width / 2, height / 2 - 20);
-  textSize(14);
-  text('Presiona R para reiniciar', width / 2, height / 2 + 20);
-  textAlign(LEFT);
-}
-
-function drawVictory() {
-  fill(0, 0, 0, 150);
-  rect(0, 0, width, height);
-  fill('#00ff00');
-  textSize(24);
-  textAlign(CENTER);
-  text('VICTORIA', width / 2, height / 2 - 20);
-  textSize(14);
-  text('Presiona R para reiniciar', width / 2, height / 2 + 20);
-  textAlign(LEFT);
+  textAlign(LEFT, TOP);
+  text('Héroe: ' + HEROES[selectedHero].name, 15, 18);
+  text('VIDAS: ' + lives, 15, 34);
+  text('PUNTAJE: ' + totalScore, 15, 50);
+  text('META: ' + Math.max(levelGoal - score, 0), 15, 66);
+  text('TIEMPO: ' + Math.max(0, ceil(levelTimer)) + 's', 15, 82);
+  text('ESTADO: ' + gameState, 15, 98);
 }
 
 function drawGrid() {
@@ -278,30 +393,110 @@ function drawGrid() {
 function drawPromptCounter() {
   fill('#00ffcc');
   textSize(12);
-  text('PROMPTS: ' + promptCount, width - 100, 25);
+  textFont('Courier New');
+  textAlign(RIGHT, TOP);
+  text('PROMPTS: ' + promptCount, width - 15, 20);
 }
 
-function playDisparoSound() {
-  if (osc) {
-    osc.freq(random(400, 800));
-    env.play(osc);
-  }
+function drawMenu() {
+  fill('#00ffcc');
+  textSize(24);
+  textAlign(CENTER, CENTER);
+  text('HÉROES DE LA INDEPENDENCIA', width / 2, height / 3);
+  textSize(16);
+  text('Presioná Enter para comenzar', width / 2, height / 2);
+  textSize(12);
+  text('Desarrollador A: Gameplay | Desarrollador B: UI y Escenarios', width / 2, height / 2 + 40);
 }
 
-function playImpactSound() {
-  if (osc) {
-    osc.freq(random(150, 300));
-    env.play(osc);
+function drawHeroSelect() {
+  fill('#00ffcc');
+  textSize(20);
+  textAlign(CENTER, CENTER);
+  text('SELECCIONÁ TU HÉROE', width / 2, height / 4);
+  textSize(14);
+  let i = 0;
+  for (let key in HEROES) {
+    let h = HEROES[key];
+    fill(h.accent);
+    text((i + 1) + '. ' + h.name + ' - ' + h.campaign, width / 2, height / 3 + i * 30);
+    i++;
   }
+  textSize(12);
+  fill('#00ffcc');
+  text('Presioná 1, 2 o 3 para elegir', width / 2, height - 40);
+}
+
+function drawLevelComplete() {
+  fill('#00ffcc');
+  textSize(20);
+  textAlign(CENTER, CENTER);
+  text('NIVEL COMPLETADO', width / 2, height / 2);
+  textSize(12);
+  text('Siguiente escenario: ' + currentLevel().name, width / 2, height / 2 + 25);
+}
+
+function drawVictory() {
+  fill(0, 0, 0, 180);
+  rect(0, 0, width, height);
+  fill('#00ff00');
+  textSize(24);
+  textAlign(CENTER, CENTER);
+  text('¡VICTORIA!', width / 2, height / 2 - 20);
+  textSize(14);
+  text('Presioná Enter para volver al menú', width / 2, height / 2 + 25);
+}
+
+function drawGameOver() {
+  fill(0, 0, 0, 180);
+  rect(0, 0, width, height);
+  fill('#ff0000');
+  textSize(24);
+  textAlign(CENTER, CENTER);
+  text('DERROTA', width / 2, height / 2 - 20);
+  textSize(14);
+  text('Presioná Enter para volver al menú', width / 2, height / 2 + 25);
 }
 
 function keyPressed() {
-  if (key === 'r' || key === 'R') {
-    if (gameState === 'GAME_OVER' || gameState === 'VICTORY') {
-      initNivel();
-      gameState = 'PLAYING';
+  if (key === 'Enter' || keyCode === ENTER) {
+    if (gameState === GAME_STATES.MENU) {
+      gameState = GAME_STATES.HERO_SELECT;
+    } else if (gameState === GAME_STATES.HERO_SELECT) {
+      startGame();
+    } else if (gameState === GAME_STATES.VICTORY || gameState === GAME_STATES.GAME_OVER) {
+      gameState = GAME_STATES.MENU;
     }
   }
+
+  if (key === '1') {
+    selectedHero = "San Martín";
+    player.color = HEROES["San Martín"].accent;
+  } else if (key === '2') {
+    selectedHero = "Belgrano";
+    player.color = HEROES.Belgrano.accent;
+  } else if (key === '3') {
+    selectedHero = "Güemes";
+    player.color = HEROES.Güemes.accent;
+  }
+
+  if (key === 'p' || key === 'P') {
+    registerPrompt();
+  }
+
+  if (key === 'r' || key === 'R') {
+    if (gameState === GAME_STATES.GAME_OVER || gameState === GAME_STATES.VICTORY) {
+      gameState = GAME_STATES.MENU;
+    }
+  }
+}
+
+function startGame() {
+  gameState = GAME_STATES.PLAYING;
+  levelIndex = 0;
+  totalScore = 0;
+  lives = 3;
+  resetLevel();
 }
 
 function mousePressed() {
@@ -309,3 +504,9 @@ function mousePressed() {
     getAudioContext().resume();
   }
 }
+
+window.addEventListener("keydown", (event) => {
+  if (event.key === "p" || event.key === "P") {
+    registerPrompt();
+  }
+});
