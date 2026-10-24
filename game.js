@@ -8,6 +8,11 @@ let isMoving = false;
 let facingRight = false;
 let promptCount = 0;
 
+const GRAVITY = 0.6;
+const JUMP_FORCE = -12;
+const MOVE_SPEED = 4;
+const FRICTION = 0.8;
+
 const GAME_STATES = Object.freeze({
   MENU: "menu",
   HERO_SELECT: "hero_select",
@@ -50,6 +55,25 @@ let levelGoal = LEVELS[0].goal;
 let levelTimer = LEVELS[0].timeLimit;
 let levelTransitionStart = 0;
 
+let player = {
+  x: 50,
+  y: 100,
+  w: 30,
+  h: 40,
+  vx: 0,
+  vy: 0,
+  vida: 3,
+  vidaMax: 3,
+  direccion: 1,
+  enSuelo: false,
+  cooldownDisparo: 0,
+  color: "#00ffcc"
+};
+
+let projectiles = [];
+let enemies = [];
+let platforms = [];
+let meta = null;
 let osc, env;
 
 function setup() {
@@ -73,6 +97,7 @@ function setup() {
 
 function selectHero(heroName) {
   selectedHero = heroName;
+  player.color = HEROES[heroName].accent;
   setScreen("title-screen");
   setStatus(`${HEROES[heroName].name} listo para la misión.`);
   updateHUD();
@@ -82,9 +107,9 @@ function startGame() {
   gameState = GAME_STATES.PLAYING;
   levelIndex = 0;
   totalScore = 0;
+  score = 0;
   lives = 3;
   setScreen("title-screen");
-  hideHUD();
   hideMenuPanels();
   showHUD();
   updateHUD();
@@ -137,21 +162,31 @@ function resetLevel() {
   const level = currentLevel();
   levelGoal = level.goal;
   levelTimer = level.timeLimit;
-  catX = 50;
-  catY = 160;
-  spawnLaser();
+  player.x = 50;
+  player.y = 100;
+  player.vx = 0;
+  player.vy = 0;
+  player.vida = player.vidaMax;
+  player.direccion = 1;
+  player.cooldownDisparo = 0;
+  score = 0;
+  projectiles = [];
+  enemies = [];
+  platforms = [];
+
+  platforms.push({ x: 0, y: 280, w: 560, h: 40 });
+  platforms.push({ x: 150, y: 210, w: 110, h: 18 });
+  platforms.push({ x: 310, y: 165, w: 110, h: 18 });
+
+  enemies.push({ x: 180, y: 240, w: 30, h: 40, vx: 1.5, rango: 80, inicio: 180 });
+  enemies.push({ x: 390, y: 120, w: 30, h: 40, vx: -1.8, rango: 72, inicio: 390 });
+
+  meta = { x: 515, y: 220, w: 24, h: 60, activo: true };
   updateHUD();
 }
 
 function currentLevel() {
   return LEVELS[levelIndex] || LEVELS[LEVELS.length - 1];
-}
-
-function spawnLaser() {
-  do {
-    laserX = floor(random(40, width - 60));
-    laserY = floor(random(40, height - 60));
-  } while (dist(catX, catY, laserX, laserY) < 120);
 }
 
 function advanceLevel() {
@@ -189,10 +224,196 @@ function registerPrompt() {
   updatePromptMeter(promptCount);
 }
 
+function playDisparoSound() {
+  if (osc) {
+    osc.freq(random(400, 800));
+    env.play(osc);
+  }
+}
+
+function playImpactSound() {
+  if (osc) {
+    osc.freq(random(150, 300));
+    env.play(osc);
+  }
+}
+
 function playCatchSound() {
-  let freq = random(600, 900);
-  osc.freq(freq);
-  env.play(osc);
+  if (osc) {
+    osc.freq(random(600, 900));
+    env.play(osc);
+  }
+}
+
+function updateInput() {
+  if (keyIsDown(LEFT_ARROW) || keyIsDown(65)) {
+    player.vx = -MOVE_SPEED;
+    player.direccion = -1;
+  } else if (keyIsDown(RIGHT_ARROW) || keyIsDown(68)) {
+    player.vx = MOVE_SPEED;
+    player.direccion = 1;
+  } else {
+    player.vx *= FRICTION;
+  }
+
+  if ((keyIsDown(UP_ARROW) || keyIsDown(87) || keyIsDown(32)) && player.enSuelo) {
+    player.vy = JUMP_FORCE;
+    player.enSuelo = false;
+  }
+
+  if ((keyIsDown(74) || keyIsDown(90)) && player.cooldownDisparo <= 0) {
+    disparar();
+    player.cooldownDisparo = 20;
+  }
+
+  if (player.cooldownDisparo > 0) player.cooldownDisparo--;
+}
+
+function updatePlayer() {
+  player.vy += GRAVITY;
+  player.x += player.vx;
+  player.y += player.vy;
+
+  player.enSuelo = false;
+  for (let p of platforms) {
+    if (colisionRect(player, p)) {
+      if (player.vy > 0 && player.y + player.h - player.vy <= p.y + 4) {
+        player.y = p.y - player.h;
+        player.vy = 0;
+        player.enSuelo = true;
+      } else if (player.vy < 0 && player.y - player.vy >= p.y + p.h - 4) {
+        player.y = p.y + p.h;
+        player.vy = 0;
+      }
+    }
+  }
+
+  if (player.x < 0) player.x = 0;
+  if (player.x + player.w > width) player.x = width - player.w;
+  if (player.y > height + 40) {
+    player.vida = 0;
+    loseLife();
+  }
+}
+
+function disparar() {
+  projectiles.push({
+    x: player.x + (player.direccion > 0 ? player.w : 0),
+    y: player.y + player.h / 3,
+    vx: player.direccion * 8,
+    w: 10,
+    h: 6,
+    activo: true
+  });
+  playDisparoSound();
+}
+
+function updateProjectiles() {
+  for (let i = projectiles.length - 1; i >= 0; i--) {
+    let pr = projectiles[i];
+    pr.x += pr.vx;
+    if (pr.x < 0 || pr.x > width || !pr.activo) {
+      projectiles.splice(i, 1);
+    }
+  }
+}
+
+function updateEnemies() {
+  for (let e of enemies) {
+    e.x += e.vx;
+    if (Math.abs(e.x - e.inicio) > e.rango) {
+      e.vx *= -1;
+    }
+  }
+}
+
+function colisionRect(a, b) {
+  return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+}
+
+function checkCollisions() {
+  for (let i = projectiles.length - 1; i >= 0; i--) {
+    let pr = projectiles[i];
+    for (let j = enemies.length - 1; j >= 0; j--) {
+      let e = enemies[j];
+      if (colisionRect(pr, e)) {
+        enemies.splice(j, 1);
+        projectiles.splice(i, 1);
+        score += 100;
+        totalScore += 1;
+        playImpactSound();
+        break;
+      }
+    }
+  }
+
+  for (let e of enemies) {
+    if (colisionRect(player, e)) {
+      player.vida--;
+      player.x = 50;
+      player.y = 100;
+      if (player.vida <= 0) {
+        loseLife();
+      }
+      break;
+    }
+  }
+
+  if (meta && colisionRect(player, meta) && score >= levelGoal) {
+    advanceLevel();
+  }
+}
+
+function drawEntities() {
+  fill(player.color);
+  rect(player.x, player.y, player.w, player.h);
+
+  fill("#ffff00");
+  for (let pr of projectiles) {
+    rect(pr.x, pr.y, pr.w, pr.h);
+  }
+
+  fill("#ff0000");
+  for (let e of enemies) {
+    rect(e.x, e.y, e.w, e.h);
+  }
+
+  fill("#444444");
+  for (let p of platforms) {
+    rect(p.x, p.y, p.w, p.h);
+  }
+
+  fill("#00ff00");
+  if (meta) rect(meta.x, meta.y, meta.w, meta.h);
+}
+
+function drawHUD() {
+  fill("#00ffcc");
+  textSize(12);
+  textFont("Courier New");
+  textAlign(LEFT, TOP);
+  text(`HÉROE: ${HEROES[selectedHero].name}`, 15, 18);
+  text(`VIDAS: ${lives}`, 15, 34);
+  text(`PUNTAJE: ${totalScore}`, 15, 50);
+  text(`META: ${Math.max(levelGoal - score, 0)}`, 15, 66);
+  text(`TIEMPO: ${Math.max(0, ceil(levelTimer))}s`, 15, 82);
+}
+
+function drawPromptCounter() {
+  fill("#00ffcc");
+  textSize(12);
+  textFont("Courier New");
+  textAlign(RIGHT, TOP);
+  text(`PROMPTS: ${promptCount}`, width - 15, 20);
+}
+
+function seedFromTopDownCatchMode() {
+  const level = currentLevel();
+  drawScenarioBackdrop(level.theme, level.name);
+  drawBackgroundGrid();
+  noFill();
+  stroke("#00ffcc55");
+  rect(0, 0, width, height);
 }
 
 function draw() {
@@ -200,10 +421,6 @@ function draw() {
   drawScenarioBackdrop(level.theme, level.name);
 
   if (gameState === GAME_STATES.MENU || gameState === GAME_STATES.HERO_SELECT) {
-    drawBackgroundGrid();
-    stroke("#00ffcc55");
-    noFill();
-    rect(0, 0, width, height);
     return;
   }
 
@@ -237,42 +454,17 @@ function draw() {
     return;
   }
 
-  isMoving = false;
-  if (keyIsDown(LEFT_ARROW)) {
-    catX -= SPEED + (levelIndex * 0.2);
-    isMoving = true;
-    facingRight = true;
-  }
-  if (keyIsDown(RIGHT_ARROW)) {
-    catX += SPEED + (levelIndex * 0.2);
-    isMoving = true;
-    facingRight = false;
-  }
-  if (keyIsDown(UP_ARROW)) {
-    catY -= SPEED + (levelIndex * 0.15);
-    isMoving = true;
-  }
-  if (keyIsDown(DOWN_ARROW)) {
-    catY += SPEED + (levelIndex * 0.15);
-    isMoving = true;
-  }
+  updateInput();
+  updatePlayer();
+  updateProjectiles();
+  updateEnemies();
+  checkCollisions();
+  drawEntities();
+  drawHUD();
+  drawPromptCounter();
 
-  catX = constrain(catX, 10, width - 70);
-  catY = constrain(catY, 10, height - 70);
-
-  drawLaserPixel(laserX, laserY);
-  drawCatPixel(catX, catY, isMoving, facingRight);
-
-  let d = dist(catX + 30, catY + 30, laserX + 12, laserY + 12);
-  if (d < 30) {
-    totalScore += 1;
-    playCatchSound();
-    spawnLaser();
-    updateHUD();
-
-    if (totalScore >= levelGoal) {
-      advanceLevel();
-    }
+  if (player.vida <= 0) {
+    loseLife();
   }
 
   levelTimer -= 0.016;
@@ -280,27 +472,49 @@ function draw() {
     loseLife();
   }
 
-  noStroke();
-  fill("#00ffcc");
-  textFont("Courier New");
-  textSize(12);
-  textAlign(LEFT, TOP);
-  text(`Héroe: ${HEROES[selectedHero].name}`, 15, 18);
-  text(`Meta: ${Math.max(levelGoal - totalScore, 0)}`, 15, 34);
-  text(`Tiempo: ${Math.max(0, ceil(levelTimer))}s`, 15, 50);
+  if (score >= levelGoal && meta) {
+    advanceLevel();
+  }
 }
 
 function keyPressed() {
-  if (keyCode === ENTER && (gameState === GAME_STATES.VICTORY || gameState === GAME_STATES.GAME_OVER)) {
-    gameState = GAME_STATES.MENU;
-    setScreen("title-screen");
-    setStatus("Elegí a tu héroe para liberar la campaña.");
-    updateHUD();
-    hideHUD();
-    return;
+  if (keyCode === ENTER) {
+    if (gameState === GAME_STATES.MENU) {
+      gameState = GAME_STATES.HERO_SELECT;
+      setScreen("hero-screen");
+      setStatus("Seleccioná a tu campeón.");
+      return;
+    }
+
+    if (gameState === GAME_STATES.HERO_SELECT) {
+      startGame();
+      return;
+    }
+
+    if (gameState === GAME_STATES.VICTORY || gameState === GAME_STATES.GAME_OVER) {
+      gameState = GAME_STATES.MENU;
+      setScreen("title-screen");
+      setStatus("Elegí a tu héroe para liberar la campaña.");
+      hideHUD();
+      return;
+    }
   }
 
-  if (keyCode === 80) {
+  if (key === "1") {
+    selectedHero = "San Martín";
+    player.color = HEROES["San Martín"].accent;
+    updateHUD();
+  } else if (key === "2") {
+    selectedHero = "Belgrano";
+    player.color = HEROES.Belgrano.accent;
+    updateHUD();
+  } else if (key === "3") {
+    selectedHero = "Güemes";
+    player.color = HEROES.Güemes.accent;
+    updateHUD();
+  }
+
+  if (key === "p" || key === "P") {
     registerPrompt();
   }
 }
